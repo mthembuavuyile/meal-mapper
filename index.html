@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local Restaurant Finder & Ordering Hub (South Africa)</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.css" />
+    <style>
+        :root {
+            --primary-color: #4CAF50;
+            --secondary-color: #333;
+            --background-color: #f0f0f0;
+            --text-color: #333;
+            --card-background: #fff;
+        }
+
+        .dark-mode {
+            --primary-color: #45a049;
+            --secondary-color: #f0f0f0;
+            --background-color: #333;
+            --text-color: #f0f0f0;
+            --card-background: #444;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            text-align: center;
+            padding: 1rem;
+            position: relative;
+        }
+
+        #dark-mode-toggle {
+            position: absolute;
+            right: 1rem;
+            top: 1rem;
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+
+        main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+
+        #map-container {
+            height: 300px;
+            margin-bottom: 1rem;
+        }
+
+        .filter-options, #search {
+            margin-bottom: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        #categories, #search-bar, #sort-by {
+            padding: 0.5rem;
+            flex-grow: 1;
+        }
+
+        #search-button {
+            padding: 0.5rem 1rem;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        .restaurant-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+        }
+
+        .restaurant-card {
+            background-color: var(--card-background);
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 0.5rem;
+            text-align: center;
+            transition: background-color 0.3s;
+            font-size: 0.8rem;
+        }
+
+        .restaurant-card img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+
+        .restaurant-card h3 {
+            font-size: 1rem;
+            margin: 0.5rem 0;
+        }
+
+        .restaurant-card p {
+            margin: 0.2rem 0;
+        }
+
+        .order-now-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.3rem 0.5rem;
+            margin-top: 0.5rem;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        footer {
+            background-color: var(--secondary-color);
+            color: white;
+            text-align: center;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-size: 0.8rem;
+        }
+
+        @media (max-width: 768px) {
+            .filter-options, #search {
+                flex-direction: column;
+            }
+
+            #categories, #search-bar, #sort-by, #search-button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>MealMapper SA</h1>
+        <button id="dark-mode-toggle">🌓</button>
+    </header>
+
+    <main>
+        <center><h1>Local Restaurant Finder & Ordering Hub (South Africa)</h1></center>
+
+        <section id="search">
+            <input type="text" id="search-bar" placeholder="Search restaurants or cuisines...">
+            <button id="search-button">Search</button>
+        </section>
+
+        <section class="filter-options">
+            <select id="categories">
+                <option value="all">All Categories</option>
+                <option value="chicken">Chicken</option>
+                <option value="pizza">Pizza</option>
+                <option value="seafood">Seafood</option>
+                <option value="local">Local Spots</option>
+            </select>
+            <select id="sort-by">
+                <option value="name">Sort by Name</option>
+                <option value="rating">Sort by Rating</option>
+                <option value="distance">Sort by Distance</option>
+            </select>
+        </section>
+
+        <section id="map">
+            <h2>Restaurants Near You</h2>
+            <div id="map-container"></div>
+        </section>
+
+        <section id="restaurant-list">
+            <h2>Featured Restaurants</h2>
+            <div class="restaurant-cards"></div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Local Restaurant Finder | All rights reserved.</p>
+        <p>Developed by Vylex Nexys</p>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.js"></script>
+    <script>
+        // Dark mode toggle
+        const darkModeToggle = document.getElementById('dark-mode-toggle');
+        darkModeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+        });
+
+        // Initialize Map
+        const map = L.map('map-container').setView([-29.8587, 31.0218], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+        }).addTo(map);
+
+        // Sample restaurant data
+        const restaurants = [
+            { name: "KFC", lat: -29.8587, lon: 31.0218, category: "chicken", image: "https://upload.wikimedia.org/wikipedia/sco/thumb/b/bf/KFC_logo.svg/1200px-KFC_logo.svg.png", orderLink: "https://order.kfc.co.za/" },
+            { name: "Debonairs Pizza", lat: -29.832395606379134, lon: 31.016717361584202, category: "pizza", image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR1dGPz_NUduw-F5Rzu7q5afP9910ElgZVgCA&s", orderLink: "https://www.debonairspizza.co.za/order-online" },
+            { name: "Ocean Basket", lat: -29.849579487192266, lon: 30.934327843131918, category: "seafood", image: "https://lemontreemall.co.za/wp-content/uploads/2019/07/ocean-basket-logo.jpg" },
+            { name: "Nando's", lat: -29.832898014370034, lon: 31.017567574445764, category: "chicken", image: "https://www.nandos.co.za/v18.0.0/assets/toolkit/images/nandos-logo.svg" },
+            { name: "Roman's Pizza", lat: -29.83594347790979, lon: 31.020172169512897, category: "pizza", image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQCFHORjqFDGBJOSuHmSH3ANzqvhpNjf4esCQ&s" },
+            { name: "Pizza Hut", lat: -29.8582, lon: 31.0195, category: "pizza", image: "https://upload.wikimedia.org/wikipedia/sco/d/d2/Pizza_Hut_logo.svg" },
+            { name: "Domino's Pizza", lat: -29.8565, lon: 31.0172, category: "pizza", image: "https://media-cdn.tripadvisor.com/media/photo-s/09/81/85/7c/domino-s-pizza-vereeniging.jpg" },
+            { name: "Lupa Osteria", lat: -29.830506038269903, lon: 31.01348247187575, category: "italian", image: "https://www.lupa.co.za/wp-content/uploads/2022/07/Lupa-Logo.png" },
+            { name: "Pedros", lat: -29.8591, lon: 31.0205, category: "chicken", image: "https://via.placeholder.com/250x150.png?text=Pedros" },
+            { name: "Hungry Lion", lat: -29.85872635920126, lon: 31.019397308732653, category: "chicken", image: "https://www.hungrylion.co.za/wp-content/uploads/2021/09/hungryLionLogo.png.webp" },
+            { name: "Spur", lat: -29.8573, lon: 31.0198, category: "grill", image: "https://via.placeholder.com/250x150.png?text=Spur" },
+            { name: "Steers", lat: -29.858008345834595, lon: 31.0233508562624, category: "fast food", image: "https://via.placeholder.com/250x150.png?text=Steers" },
+            { name: "McDonald's", lat: -29.83288212027018, lon: 30.995231488016483, category: "fast food", image: "https://via.placeholder.com/250x150.png?text=McDonald's" },
+            { name: "Wimpy", lat: -29.8595, lon: 31.0202, category: "fast food", image: "https://via.placeholder.com/250x150.png?text=Wimpy" },
+            { name: "Mugg & Bean", lat: -29.8589, lon: 31.0191, category: "coffee", image: "https://via.placeholder.com/250x150.png?text=Mugg+%26+Bean" },
+            { name: "Fishaways", lat: -29.8578, lon: 31.0220, category: "seafood", image: "https://via.placeholder.com/250x150.png?text=Fishaways" },
+            { name: "Honchos", lat: -29.858898921266753, lon: 31.017102599659275, category: "chicken", image: "https://via.placeholder.com/250x150.png?text=Honchos" },
+            { name: "Burger King", lat: -29.710673491856483, lon: 31.041247531162984, category: "fast food", image: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cc/Burger_King_2020.svg/200px-Burger_King_2020.svg.png" }
+        ];
+
+        // Display restaurant markers and cards
+        function displayRestaurants(filteredRestaurants) {
+            map.eachLayer((layer) => {
+                if (layer instanceof L.Marker) {
+                    map.removeLayer(layer);
+                }
+            });
+            const restaurantCards = document.querySelector('.restaurant-cards');
+            restaurantCards.innerHTML = '';
+
+            filteredRestaurants.forEach(restaurant => {
+                L.marker([restaurant.lat, restaurant.lon]).addTo(map)
+                    .bindPopup(restaurant.name);
+                
+                const card = document.createElement('div');
+                card.className = 'restaurant-card';
+                card.dataset.category = restaurant.category;
+                card.innerHTML = `
+                    <img src="${restaurant.image}" alt="${restaurant.name}" loading="lazy">
+                    <h3>${restaurant.name}</h3>
+                    <p>Category: ${restaurant.category}</p>
+                    <p>Rating: ${restaurant.rating || 'N/A'}</p>
+                    <p>Distance: ${restaurant.distance ? restaurant.distance.toFixed(2) + ' km' : 'N/A'}</p>
+                    <button class="order-now-btn" data-restaurant="${restaurant.name}">Order Now</button>
+                `;
+                restaurantCards.appendChild(card);
+            });
+
+            // Add event listeners to order buttons
+            document.querySelectorAll('.order-now-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const restaurantName = this.getAttribute('data-restaurant');
+                    orderNow(restaurantName);
+                });
+            });
+        }
+
+        // Filter and sort restaurants
+        function filterAndSortRestaurants() {
+            const category = document.getElementById('categories').value;
+            const sortBy = document.getElementById('sort-by').value;
+            const searchTerm = document.getElementById('search-bar').value.toLowerCase();
+
+            let filteredRestaurants = restaurants.filter(r => 
+                (category === 'all' || r.category === category) &&
+                (r.name.toLowerCase().includes(searchTerm) || r.category.toLowerCase().includes(searchTerm))
+            );
+
+            // Sort restaurants
+            filteredRestaurants.sort((a, b) => {
+                if (sortBy === 'name') return a.name.localeCompare(b.name);
+                if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0);
+                if (sortBy === 'distance') return (a.distance || Infinity) - (b.distance || Infinity);
+                return 0;
+            });
+
+            displayRestaurants(filteredRestaurants);
+        }
+
+        // Event listeners
+        document.getElementById('categories').addEventListener('change', filterAndSortRestaurants);
+        document.getElementById('sort-by').addEventListener('change', filterAndSortRestaurants);
+        document.getElementById('search-button').addEventListener('click', filterAndSortRestaurants);
+        document.getElementById('search-bar').addEventListener('input', filterAndSortRestaurants);
+
+        // Order now function
+        function orderNow(restaurantName) {
+            const restaurant = restaurants.find(r => r.name === restaurantName);
+            if (restaurant && restaurant.orderLink) {
+                window.open(restaurant.orderLink, '_blank');
+            } else {
+                alert("Sorry, online ordering is not available for this restaurant.");
+            }
+        }
+
+        // Geolocation and distance calculation
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(position => {
+                const userLat = position.coords.latitude;
+                const userLon = position.coords.longitude;
+                map.setView([userLat, userLon], 14);
+
+                L.marker([userLat, userLon]).addTo(map)
+                    .bindPopup("You are here")
+                    .openPopup();
+
+                // Calculate distance for each restaurant
+                restaurants.forEach(restaurant => {
+                    restaurant.distance = getDistance(userLat, userLon, restaurant.lat, restaurant.lon);
+                });
+
+                filterAndSortRestaurants();
+            }, () => {
+                alert("Unable to retrieve your location. Showing default view.");
+                filterAndSortRestaurants();
+            });
+        } else {
+            alert("Geolocation is not supported by this browser.");
+            filterAndSortRestaurants();
+        }
+
+        // Helper function to calculate distance between two points
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Radius of the Earth in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+    </script>
+</body>
+</html>
